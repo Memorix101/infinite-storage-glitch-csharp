@@ -8,7 +8,7 @@ Sadly, not on macOS becasue of limitations with [FFMediaToolkit](https://github.
 
 It is not compatible with DvorakDwarf's version, but the idea is similar.
 
-The program uses [FFMpeg 5.1.2 for Windows](https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-5.1.2-full_build-shared.7z)
+The program uses [FFMpeg 5.1.2 for Windows](https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-5.1.2-full_build-shared.7z). Linux needs to install it via terminal. Makes sure to use shared binaries on Windows. On Linux download FFmpeg using your package manager.
 
 ### What is different?
 
@@ -24,14 +24,27 @@ The images use pixels in 4x4 size (1 pixel is a 16 pixel block).
 The EOF (end of file) is marked on the last image as a blue pixel. I also thought about to replace that idea with a "metadata" first frame. Maybe I'll add that later.
 The output resolution is 1280x720 (720p).
 
+![Pixel block example](https://i.imgur.com/pzIPSMt.png)
+
 It is necessary that the output file does not get resized and/or loses frames, otherwise your data might be corrupted and lost. So, make sure only to download the original or a close to the original output file. Compression is dangerous here and actually the challenge of the project. 4x4 pixels seem to work well with this.
 
-##### Keep in mind that embedded files are larger than your original one!
+![Example frame](https://i.imgur.com/TIcaRLm.jpg)
+
+#### Keep in mind that embedded files are larger than your original one!
 
 ### About the project
 
 The code is not clean and "hacked together" in 48hrs.
 It needs optimization and clean up.
-Also, I am thinking about adding additional compression.
+~~Also, I am thinking about adding additional compression.~~
+The project uses [Zstd compression](https://facebook.github.io/zstd/).
 This is a proof of concept project for educational purposes. This might violate the YouTube TOS (or any other service).
 You use it at your own risk.
+
+### Dependencies (nuget packages)
+
+[FFMediaToolkit](https://github.com/radek-k/FFMediaToolkit)
+[ZstdSharp](https://github.com/oleg-st/ZstdSharp)
+[ImageSharp](https://github.com/SixLabors/ImageSharp)
+[ImageSharp](https://github.com/SixLabors/ImageSharp)
+[ImageSharp.Drawing](https://github.com/SixLabors/ImageSharp.Drawing)

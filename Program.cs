@@ -77,22 +77,24 @@ namespace infinite_storage_glitch_csharp
         }
         */
 
-        static MemoryStream zstd_compress(MemoryStream memoryStream, int level)
+        static byte[] zstd_compress(byte[] ms, int level)
         {
-            var input = memoryStream;
-            var output = new MemoryStream();
-            var compressionStream = new CompressionStream(output, level);
-            input.CopyTo(compressionStream);
-            return output;
+            Console.Write("Compressing data stream\n");
+            MemoryStream dataStream = new MemoryStream(ms);
+            var resultStream = new MemoryStream();
+            using (var compressionStream = new CompressionStream(resultStream, level))
+                dataStream.CopyTo(compressionStream);
+            return resultStream.ToArray();
         }
 
-        static MemoryStream zstd_decompress(MemoryStream memoryStream, int level)
+        static byte[] zstd_decompress(byte[] ms, int level)
         {
-            var input = memoryStream;
-            var output = new MemoryStream();
-            var decompressionStream = new DecompressionStream(input);
-            decompressionStream.CopyTo(output);
-            return output;
+            Console.Write("Decompressing data stream\n");
+            MemoryStream input = new MemoryStream(ms);
+            var resultStream = new MemoryStream();
+            using (var decompressionStream = new DecompressionStream(input, level))
+                decompressionStream.CopyTo(resultStream);
+            return resultStream.ToArray();
         }
 
         static void WriteCustomHeader(string path, uint eof)
@@ -187,14 +189,13 @@ namespace infinite_storage_glitch_csharp
         static void WriteFile(string path, OutputMode outputMode)
         {
             byte[] fileBytes = File.ReadAllBytes(path);
-            MemoryStream fileStream = new MemoryStream(fileBytes);
+            //MemoryStream fileStream = new MemoryStream(fileBytes);
             //FileStream fileStream = new FileStream(path, FileMode.OpenOrCreate);
 
-            /*// zstd compression
-            var compressed = zstd_compress(fileStream, 3);
-            fileStream = new MemoryStream();
-            compressed.Position = 0;
-            compressed.CopyTo(fileStream);*/
+            // zstd compression
+            var compressed = zstd_compress(fileBytes, 3);
+            MemoryStream fileStream = new MemoryStream(compressed);
+
             BinaryReader binReader = new BinaryReader(fileStream);
             var files = Directory.GetFiles("./", "out*.*");
             if (files.Length > 0) { Console.WriteLine("Clearing all old output files"); }
@@ -678,28 +679,28 @@ namespace infinite_storage_glitch_csharp
             //var files = Directory.GetFiles("./", "out.gif");
             bool eof = false;
             int eof_end_bits = 0;
-            byte[] _out = new byte[(1280 * 720) * 7];
+            byte[] data = new byte[(1280 * 720) * 7];
 
             switch (outputMode)
             {
                 case OutputMode.GIF:
-                    _out = GenExportGif(path, ref eof, ref eof_end_bits);
+                    data = GenExportGif(path, ref eof, ref eof_end_bits);
                     break;
                 case OutputMode.JPEG:
-                    _out = GenExportJpeg(path, ref eof, ref eof_end_bits);
+                    data = GenExportJpeg(path, ref eof, ref eof_end_bits);
                     break;
                 case OutputMode.Video:
-                    _out = GenExportVideo(path, ref eof, ref eof_end_bits);
+                    data = GenExportVideo(path, ref eof, ref eof_end_bits);
                     break;
             }
 
             Console.WriteLine($"\nSaving output");
             if (!Directory.Exists("./export")) { Directory.CreateDirectory("./export"); }
-            Array.Resize(ref _out, (eof_end_bits / 8)); // would be nice to know how to prevent this 
+            Array.Resize(ref data, (eof_end_bits / 8)); // would be nice to know how to prevent this 
 
-            //var a = zstd_decompress(new MemoryStream(_out), 3).ToArray();
+            var decompressed_data = zstd_decompress(data, 3);
 
-            File.WriteAllBytes($"./export/{name}", _out);
+            File.WriteAllBytes($"./export/{name}", decompressed_data);
             //if (files.Length > 0) { Console.WriteLine("Clearing all output files"); foreach (var f in files) { File.Delete(f); } }
             Console.WriteLine($"Done!");
         }
