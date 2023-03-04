@@ -20,8 +20,9 @@ Also, there is a demo GIF (Download it only in original size!) [Imgur](https://i
 
 ### How does it work and limitations
 
-The images use pixels in 4x4 size (1 pixel is a 16 pixel block).
-The EOF (end of file) is marked on the last image as a blue pixel. I also thought about to replace that idea with a "metadata" first frame. Maybe I'll add that later.
+The images use pixels in 4x4 size (1 pixel is a 16 pixel block). You can use RGB values to represent bit values. So what the program does is translating the bytes (8 bits = 1 byte) of a file to
+bits represented in pixels. Bit with value 0 = black -> RGBA32(0,0,0,255) and bit with value 1 = white -> RGBA32(255,255,255,255). [RGBA32](https://docs.sixlabors.com/api/ImageSharp/SixLabors.ImageSharp.PixelFormats.Rgba32.html)(red, green, blue, alpha).
+The EOF (end of file) is marked on the last image as a blue pixel RGBA32(0,0,255,255). I also thought about to replace that idea with a "metadata" first frame. Maybe I'll add that later.
 The output resolution is 1280x720 (720p).
 
 ![Pixel block example](https://i.imgur.com/pzIPSMt.png)
