@@ -43,8 +43,8 @@ You use it at your own risk.
 
 ### Dependencies (nuget packages)
 
-[FFMediaToolkit](https://github.com/radek-k/FFMediaToolkit)
-[ZstdSharp](https://github.com/oleg-st/ZstdSharp)
-[ImageSharp](https://github.com/SixLabors/ImageSharp)
-[ImageSharp](https://github.com/SixLabors/ImageSharp)
-[ImageSharp.Drawing](https://github.com/SixLabors/ImageSharp.Drawing)
+[FFMediaToolkit](https://github.com/radek-k/FFMediaToolkit) <br/>
+[ZstdSharp](https://github.com/oleg-st/ZstdSharp) <br/>
+[ImageSharp](https://github.com/SixLabors/ImageSharp) <br/>
+[ImageSharp](https://github.com/SixLabors/ImageSharp) <br/>
+[ImageSharp.Drawing](https://github.com/SixLabors/ImageSharp.Drawing) <br/>
