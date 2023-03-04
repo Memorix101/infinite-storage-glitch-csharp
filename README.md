@@ -8,7 +8,7 @@ Sadly, not on macOS becasue of limitations with [FFMediaToolkit](https://github.
 
 It is not compatible with DvorakDwarf's version, but the idea is similar.
 
-The programm uses [FFMpeg 5.1.2 for Windows](https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-5.1.2-full_build-shared.7z)
+The program uses [FFMpeg 5.1.2 for Windows](https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-5.1.2-full_build-shared.7z)
 
 ### What is different?
 
