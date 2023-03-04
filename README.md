@@ -46,5 +46,4 @@ You use it at your own risk.
 [FFMediaToolkit](https://github.com/radek-k/FFMediaToolkit) <br/>
 [ZstdSharp](https://github.com/oleg-st/ZstdSharp) <br/>
 [ImageSharp](https://github.com/SixLabors/ImageSharp) <br/>
-[ImageSharp](https://github.com/SixLabors/ImageSharp) <br/>
 [ImageSharp.Drawing](https://github.com/SixLabors/ImageSharp.Drawing) <br/>
