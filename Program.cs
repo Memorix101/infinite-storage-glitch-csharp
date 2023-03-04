@@ -79,7 +79,7 @@ namespace infinite_storage_glitch_csharp
 
         static byte[] zstd_compress(byte[] ms, int level)
         {
-            Console.Write("Compressing data stream\n");
+            Console.Write("\nCompressing data stream\n");
             MemoryStream dataStream = new MemoryStream(ms);
             var resultStream = new MemoryStream();
             using (var compressionStream = new CompressionStream(resultStream, level))
@@ -89,7 +89,7 @@ namespace infinite_storage_glitch_csharp
 
         static byte[] zstd_decompress(byte[] ms, int level)
         {
-            Console.Write("Decompressing data stream\n");
+            Console.Write("\nDecompressing data stream\n");
             MemoryStream input = new MemoryStream(ms);
             var resultStream = new MemoryStream();
             using (var decompressionStream = new DecompressionStream(input, level))
@@ -188,6 +188,7 @@ namespace infinite_storage_glitch_csharp
 
         static void WriteFile(string path, OutputMode outputMode)
         {
+            Console.Write($"\n>> Writing file: {path}");
             byte[] fileBytes = File.ReadAllBytes(path);
             //MemoryStream fileStream = new MemoryStream(fileBytes);
             //FileStream fileStream = new FileStream(path, FileMode.OpenOrCreate);
@@ -334,7 +335,7 @@ namespace infinite_storage_glitch_csharp
                 }
                 if (outputMode == OutputMode.GIF)
                 {
-                    Console.WriteLine("\nGenerating GIF");
+                    Console.Write("\nGenerating GIF");
                     using (var ms = new MemoryStream())
                     {
                         GifEncoder encoder = new GifEncoder();
@@ -684,17 +685,20 @@ namespace infinite_storage_glitch_csharp
             switch (outputMode)
             {
                 case OutputMode.GIF:
+                    Console.Write($"\n>> Reading file: {path}");
                     data = GenExportGif(path, ref eof, ref eof_end_bits);
                     break;
                 case OutputMode.JPEG:
+                    Console.Write($"\n>> Reading files in: {path}");
                     data = GenExportJpeg(path, ref eof, ref eof_end_bits);
                     break;
                 case OutputMode.Video:
+                    Console.Write($"\n>> Reading file: {path}");
                     data = GenExportVideo(path, ref eof, ref eof_end_bits);
                     break;
             }
 
-            Console.WriteLine($"\nSaving output");
+            Console.Write($"\nSaving output");
             if (!Directory.Exists("./export")) { Directory.CreateDirectory("./export"); }
             Array.Resize(ref data, (eof_end_bits / 8)); // would be nice to know how to prevent this 
 
@@ -708,7 +712,7 @@ namespace infinite_storage_glitch_csharp
         static void ClearConsole()
         {
             Console.Clear();
-            Console.WriteLine("infinite storage glitch - by memorix101");
+            Console.Write("infinite storage glitch - by memorix101");
         }
 
         static void Main(string[] args)
@@ -742,7 +746,7 @@ namespace infinite_storage_glitch_csharp
                         break;
                     case "1":
                         ClearConsole();
-                        Console.Write("\rEnter file path:\n");
+                        Console.Write("\rEnter file path (Directory for JPGs):\n");
                         path = Console.ReadLine();
                         ClearConsole();
                         Console.Write("\rInput format (0 - GIF, 1 - JPEG, 2 - MP4):\n0 for default - GIF\n");
