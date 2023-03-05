@@ -79,7 +79,7 @@ namespace infinite_storage_glitch_csharp
 
         static byte[] zstd_compress(byte[] ms, int level)
         {
-            Console.Write("\nCompressing data stream\n");
+            Console.Write("\nCompressing datastream\n");
             MemoryStream dataStream = new MemoryStream(ms);
             var resultStream = new MemoryStream();
             using (var compressionStream = new CompressionStream(resultStream, level))
@@ -89,7 +89,7 @@ namespace infinite_storage_glitch_csharp
 
         static byte[] zstd_decompress(byte[] ms, int level)
         {
-            Console.Write("\nDecompressing data stream\n");
+            Console.Write("\nDecompressing datastream");
             MemoryStream input = new MemoryStream(ms);
             var resultStream = new MemoryStream();
             using (var decompressionStream = new DecompressionStream(input, level))
@@ -179,6 +179,103 @@ namespace infinite_storage_glitch_csharp
             return ret;
         }
 
+        static void AddMetadataFrame(string name, ref byte[] originalData)//, ref int headerSize)
+        {
+            Console.Write($"\nAdding metadata frame");
+            FileInfo fileInfo = new FileInfo(name);
+            string fileName = fileInfo.Name;
+            // add magic number
+            // add eof
+            // add filename
+            // add headersize
+            MemoryStream ms = new MemoryStream();
+            BinaryWriter bw = new BinaryWriter(ms);
+            bw.Write(Encoding.ASCII.GetBytes("ISGv2"));
+            bw.Write((byte)0);
+            bw.Write(originalData.Length);
+            bw.Write((byte)0);
+            bw.Write(Encoding.ASCII.GetBytes(fileName));
+            bw.Write((byte)0);
+            //bw.Close();
+            byte[] outBytes = new byte[(int)originalData.Length + (int)ms.ToArray().Length];
+            //headerSize = (int)ms.Length;
+            ms.ToArray().CopyTo(outBytes, 0);
+            originalData.CopyTo(outBytes, ms.Length);
+            Array.Resize(ref originalData, outBytes.Length);
+            outBytes.CopyTo(originalData, 0);
+        }
+
+        static void ReadMetadataFrame(ref byte[] data)
+        {
+            MemoryStream ms = new MemoryStream(data);
+            // check magic number
+            // check eof
+            // check filename
+            // check headersize
+            BinaryReader binaryReader = new BinaryReader(ms);
+            string out_magicNumber = string.Empty;
+            string out_fileName = string.Empty;
+            uint eof = 0;
+            while (true)
+            {
+                var _ = binaryReader.ReadChar();
+                if (_ == '\0') { break; }
+                out_magicNumber += _;
+            }
+
+            if (out_magicNumber != "ISGv2")
+            {
+                Console.Write($"\nNo metaframe found");
+                return;
+            }
+            else
+            {
+                eof = binaryReader.ReadUInt32();
+                binaryReader.BaseStream.Position++;
+                while (true)
+                {
+                    var _ = binaryReader.ReadChar();
+                    if (_ == '\0') { break; }
+                    out_fileName += _;
+                }
+                byte[] outBytes = new byte[eof]; // data.Length + out_magicNumber.Length +  Marshal.SizeOf(eof) + out_fileName.Length
+                Array.Copy(data, 10 + out_fileName.Length + 2, outBytes, 0, eof);
+                Array.Clear(data);
+                Array.Resize(ref data, (int)eof);
+                outBytes.CopyTo(data, 0);
+                Console.Write($"\nOriginal filename: {out_fileName}");
+                binaryReader.Close();
+            }
+        }
+
+        static int ReadCompressionOffset(ref byte[] data, int eof_size)
+        {
+            int ret = 0;
+            try
+            {
+                MemoryStream ms = new MemoryStream(data);
+                BinaryReader binaryReader = new BinaryReader(ms);
+                ret = binaryReader.ReadInt32(); 
+                ms.Position++;
+                ms.SetLength(eof_size - ret + 5); // {byte[124837]} + meta header offset
+                //ms.ToArray().CopyTo(data, ms.Position);
+                //MemoryStream tmp = new MemoryStream(eof_size - ret);
+                //ms.Position = 0;
+                //ms.CopyTo(tmp);
+                // tmp.Position = 5;
+                byte[] tmp = ms.ToArray();
+                Array.Copy(tmp, 5, data, 0, ms.Length-5);
+                Array.Resize(ref data, eof_size - ret);
+            }
+            catch (Exception ex)
+            {
+                Console.Write("\nNo v2 file header found");
+                ret = 0;
+            }
+
+            return ret;
+        }
+
         enum OutputMode
         {
             GIF = 0,
@@ -190,12 +287,61 @@ namespace infinite_storage_glitch_csharp
         {
             Console.Write($"\n>> Writing file: {path}");
             byte[] fileBytes = File.ReadAllBytes(path);
-            //MemoryStream fileStream = new MemoryStream(fileBytes);
-            //FileStream fileStream = new FileStream(path, FileMode.OpenOrCreate);
+            //FileStream fileStream = new FileStream(path, FileMode.OpenOrCreate); // very slow
+
+            // Adding metadata
+            //int headerSize = 0;
+            AddMetadataFrame(path, ref fileBytes);//, ref headerSize);
+            //ReadMetadataFrame(ref fileBytes); // testing
+
+            // dataBufferSize = (dataLenght + metaDataLength) * 8f * 16f + remaining 0 bytes of last frame
+            float splits = (fileBytes.Length) / (res.X * res.Y) * 8.0f * 16.0f; // 8 bity = 1 byte * 4x4 (16) pixels = 1 pixel block
+            float remainingFactora = ((int)MathF.Ceiling(splits) - splits);
+            float remainingFactorb = (splits - (int)splits);
+            float remaininDataSizea = fileBytes.Length / splits;
+            float remaininDataSizeb = remaininDataSizea * remainingFactora;
+            float remainingframeSize = ((res.X * res.Y) * remainingFactora) / 16; // remaining factor of last frame
+            int IremainingframeSize = (int)remainingframeSize;
+            float dataBufferSize = ((fileBytes.Length)) + (remaininDataSizeb); // bytes in bit size
+            long IdataBufferSize = (int)MathF.Ceiling((float)dataBufferSize); // should be 129600 bytes -> profile.jpg
+                                                             // ----------
+                                                             // IremainingframeSize -> empty bytes -> 38175
+                                                             // should be 1047998
+                                                             // DONE! - get rid of blue pixel eof by calculating byte size 
+                                                             // of all frames instead of marking eof and inserting 0 bytes
+                                                             // at eof fill the byte frame and compress it.
+                                                             // But how add up to decreased/increased size after compression? Add it uncompressed as second "metadata"? (Yes. I did that)
+
+            byte[] newData = new byte[IdataBufferSize];
+            fileBytes.CopyTo(newData, 0);
 
             // zstd compression
-            var compressed = zstd_compress(fileBytes, 3);
-            MemoryStream fileStream = new MemoryStream(compressed);
+            var compressed = zstd_compress(fileBytes, 3); //var compressed = zstd_compress(newData, 3);
+            MemoryStream compressedfileStream = new MemoryStream(compressed);
+            float compressionFactor = (float)IdataBufferSize - (float)compressedfileStream.Length;
+
+            //MemoryStream fileStream = new MemoryStream(newData); // without compression v0.2.2+ without blue pixel
+            MemoryStream fileStream = new MemoryStream((int)IdataBufferSize); // with compression v0.2.2+ without blue pixel
+            compressedfileStream.CopyTo(fileStream);
+
+            // Write compression offset as first data
+            MemoryStream tempStream = new MemoryStream((int)IdataBufferSize);
+            BinaryWriter bwTemp = new BinaryWriter(tempStream);
+            bwTemp.Write((int)compressionFactor);
+            bwTemp.Write((byte)0);
+            fileStream.Position = 0;
+            fileStream.CopyTo(tempStream);
+
+            // fill datastream
+            BinaryWriter bw = new BinaryWriter(fileStream);
+            for (int i = (int)tempStream.Position; i < tempStream.Capacity; i++) { bwTemp.Write((byte)0); }
+            fileStream.Position = 0;
+            tempStream.Position = 0;
+            tempStream.CopyTo(fileStream);
+            //fileStream.Position = fileStream.Capacity;
+            //bw.Close();
+
+            //MemoryStream fileStream = new MemoryStream(compressedfileStream.ToArray()); // v0.2.0+ with blue pixel
 
             BinaryReader binReader = new BinaryReader(fileStream);
             var files = Directory.GetFiles("./", "out*.*");
@@ -210,6 +356,7 @@ namespace infinite_storage_glitch_csharp
                 long currentRow = fileStream.Position;
                 int whitePixs = 0;
                 int blackPixs = 0;
+                int emptyBytes = 0;
                 Image<Rgba32> gif = new Image<Rgba32>((int)res.X, (int)res.Y);
                 while (fileStream.Position < fileStream.Length)
                 {
@@ -273,6 +420,7 @@ namespace infinite_storage_glitch_csharp
                             }
                             else
                             {
+                                throw new ArgumentOutOfRangeException("ERROR: Wrong datastream size"); // v0.2.2+ without blue pixel
                                 //Console.WriteLine($"End of filestream. Filling with null");
                                 /*if (!eol)
                                 {
@@ -296,11 +444,12 @@ namespace infinite_storage_glitch_csharp
                                 }
                                 else
                                 {*/
-                                    //image[w, h] = Color.Black; 
-                                    IBrush brush = Brushes.Solid(Color.Black);
-                                    IPath rect = new RectangularPolygon(w, h, 4, 4);
-                                    IPen pen = Pens.Solid(Color.Black, 1);
-                                    image.Mutate(x => x.Fill(brush, rect).Draw(pen, rect));
+                                //image[w, h] = Color.Black; 
+                                IBrush brush = Brushes.Solid(Color.Black);
+                                IPath rect = new RectangularPolygon(w, h, 4, 4);
+                                IPen pen = Pens.Solid(Color.Black, 1);
+                                image.Mutate(x => x.Fill(brush, rect).Draw(pen, rect));
+                                emptyBytes++;
                                 //} // also works on ImageFrame<T>
                                 //}
                             }
@@ -364,8 +513,9 @@ namespace infinite_storage_glitch_csharp
                         for (int b = 0; b < gif.Frames.Count + 1; b++)
                         {
                             if (b == 0) { continue; } // ImageSharp puts the first frame last 
-                            byte[] pixelBytes = new byte[gif.Width * gif.Height * Unsafe.SizeOf<Rgba32>()];
-                            if (b == gif.Frames.Count) { gif.Frames[7].CopyPixelDataTo(pixelBytes); } else { gif.Frames[b].CopyPixelDataTo(pixelBytes); }
+                            byte[] pixelBytes = new byte[gif.Width * gif.Height * Unsafe.SizeOf<Rgba32>()]; 
+                            if (b == gif.Frames.Count) { gif.Frames[gif.Frames.Count - 1].CopyPixelDataTo(pixelBytes); } 
+                            else { gif.Frames[b].CopyPixelDataTo(pixelBytes); } // overwrites last frame with empty one -> so we add one frame too much and remove it in the read function
                             ImageData imageData = new ImageData(pixelBytes, ImagePixelFormat.Rgba32, gif.Width, gif.Height);
                             video.Video.AddFrame(imageData);
                             Console.Write($"\rEncoding MP4 {(int)(((float)b / (float)gif.Frames.Count) * 100f)}%");
@@ -378,11 +528,13 @@ namespace infinite_storage_glitch_csharp
             }
         }
 
-        static byte[] GenExportGif(string path, ref bool eof_ref, ref int eof_end_bits_ref)
+        static byte[] GenExportGif(string path, ref bool eof_ref, ref int eof_end_bits_ref, ref int out_eof)
         {
             bool eof = false;
             int eof_end_bits = 0;
             int undefined_pixels = 0;
+            bool v1 = false; // if old version with blue pixel
+
             Image<Rgba32> image = Image.Load<Rgba32>($"{path}");
 
             image.Frames.RemoveFrame(0); // https://stackoverflow.com/a/56781434 
@@ -393,7 +545,8 @@ namespace infinite_storage_glitch_csharp
             Console.Write($"\n");
             long eof_pos = 0;
             long byte_counter = 0;
-            byte[] ba = new byte[1280 * 720 * image.Frames.Count + 1];
+            out_eof = (1280 * 720 * image.Frames.Count) / (8 * 16);
+            byte[] ba = new byte[(1280 * 720 * image.Frames.Count)]; // create buffer with overhead
             BitArray bits = new BitArray(ba.Length);
             int b = 0;
             for (int i = 0; i < image.Frames.Count; i++)
@@ -419,6 +572,7 @@ namespace infinite_storage_glitch_csharp
                                                                                      //if (pixel.R != 0 && pixel.G == 0 && pixel.B != 0)// gray
                     {
                         eof = true;
+                        v1 = true;
                         //bits.CopyTo(ba, 0);
                         eof_pos = byte_counter - 1;
                         eof_end_bits++;
@@ -456,43 +610,54 @@ namespace infinite_storage_glitch_csharp
             Console.Write($"\nIn White pixels: {whitePixs}");
             Console.Write($"\nIn Black pixels: {blackPixs}");
             var eof_s = eof ? "EOF found" : "WARNING: EOF NOT FOUND! FILE MAY BE CORUPTED!";
-            Console.Write($"\n{eof_s} - {eof_pos / 8}");
+            if (v1) Console.Write($"\n{eof_s} - {eof_pos / 8}");
             eof_end_bits_ref = (int)eof_pos + 8; //eof_end_bits * 16;
             eof_ref = eof;
             return ba;
         }
 
-        static byte[] GenExportVideo(string path, ref bool eof_ref, ref int eof_end_bits_ref)
+        static byte[] GenExportVideo(string path, ref bool eof_ref, ref int eof_end_bits_ref, ref int out_eof)
         {
             bool eof = false;
             int eof_end_bits = 0;
             int undefined_pixels = 0;
+            bool v1 = false; // if old version with blue pixel
 
             var file = MediaFile.Open(path);
 
             int whitePixs = 0;
             int blackPixs = 0;
-            Console.Write($"\n");
+            //Console.Write($"\n");
             long eof_pos = 0;
             long byte_counter = 0;
-            byte[] ba = new byte[1280 * 720 * (int)file.Video.Info.NumberOfFrames + 1];
+            int frameCount = (int)file.Video.Info.NumberOfFrames;
+            out_eof = (1280 * 720 * frameCount) / (8 * 16); // ignore last frame it's empty
+            byte[] ba = new byte[1280 * 720 * frameCount];
             BitArray bits = new BitArray(ba.Length);
             int b = 0;
             Console.Write($"\n");
-            for (int i = 0; i < file.Video.Info.NumberOfFrames; i++)
+            for (int i = 0; i < frameCount; i++)
             {
-                Console.Write($"\rReading input image {i + 1}/{file.Video.Info.NumberOfFrames}");
+                Console.Write($"\rReading input image {i + 1}/{file.Video.Info.NumberOfFrames - 1}");
                 //Console.Write($"\rReading input image {i + 1}/{image.Frames.Count}");
                 //ImageData imageData = new ImageData(null, ImagePixelFormat.Bgr24, 1280, 720);
                 byte[] pixelBytes = new byte[1280 * 720 * Unsafe.SizeOf<Bgr24>()];
                 file.Video.TryGetNextFrame(pixelBytes);
                 Image<Bgr24> image = Image.LoadPixelData<Bgr24>(pixelBytes, 1280, 720);//imageData.ToBitmap();                
-                //ImageFrame<Rgba32> u = image.Frames[i];
+                //ImageFrame<Rgba32> u = image.Frames[i];                
                 int width = image.Width;
                 int height = image.Height;
                 Bgr24[] pixelArray = new Bgr24[width * height];
                 image.CopyPixelDataTo(pixelArray);
                 int tolerance = 200; // default 200
+                // remove empty frame
+                bool allElementsAreZero = pixelBytes.All(o => o == 0);
+                if (allElementsAreZero)
+                {
+                    frameCount--;
+                    out_eof = (1280 * 720 * frameCount) / (8 * 16);
+                    continue;
+                }
                 for (int x = 0; x < pixelArray.Length; x += 4)
                 {
                     var offset = image.Width * 0.4f;
@@ -505,6 +670,7 @@ namespace infinite_storage_glitch_csharp
                                                                                      //if (pixel.R != 0 && pixel.G == 0 && pixel.B != 0)// gray
                     {
                         eof = true;
+                        v1 = true;
                         //bits.CopyTo(ba, 0);
                         eof_pos = byte_counter - 1;
                         eof_end_bits++;
@@ -541,7 +707,7 @@ namespace infinite_storage_glitch_csharp
             Console.Write($"\nIn White pixels: {whitePixs}");
             Console.Write($"\nIn Black pixels: {blackPixs}");
             var eof_s = eof ? "EOF found" : "WARNING: EOF NOT FOUND! FILE MAY BE CORUPTED!";
-            Console.Write($"\n{eof_s} - {eof_pos / 8}");
+            if (v1) Console.Write($"\n{eof_s} - {eof_pos / 8}");
             eof_end_bits_ref = (int)eof_pos + 8; //eof_end_bits * 16;
             eof_ref = eof;
             return ba;
@@ -561,19 +727,20 @@ namespace infinite_storage_glitch_csharp
                 .OrderBy(x => x.SortStr).Select(x => x.OrgStr);
         }
 
-        static byte[] GenExportJpeg(string path, ref bool eof_ref, ref int eof_end_bits_ref)
+        static byte[] GenExportJpeg(string path, ref bool eof_ref, ref int eof_end_bits_ref, ref int out_eof)
         {
             bool eof = false;
             int eof_end_bits = 0;
             int undefined_pixels = 0;
+            bool v1 = false; // if old version with blue pixel
             var files = Directory.GetFiles(path, "out*.jpg");
             files = NaturalSort(files).ToArray();
             int whitePixs = 0;
             int blackPixs = 0;
-            Console.Write($"\n");
             long eof_pos = 0;
             long byte_counter = 0;
-            byte[] ba = new byte[1280 * 720 * files.Length + 1];
+            out_eof = (1280 * 720 * files.Length) / (8 * 16);
+            byte[] ba = new byte[1280 * 720 * files.Length];
             BitArray bits = new BitArray(ba.Length);
             int b = 0;
             for (int i = 0; i < files.Length; i++)
@@ -599,6 +766,7 @@ namespace infinite_storage_glitch_csharp
                                                                                      //if (pixel.R != 0 && pixel.G == 0 && pixel.B != 0)// gray
                     {
                         eof = true;
+                        v1 = true;
                         //bits.CopyTo(ba, 0);
                         eof_pos = byte_counter - 1;
                         eof_end_bits++;
@@ -637,7 +805,7 @@ namespace infinite_storage_glitch_csharp
             Console.Write($"\nIn White pixels: {whitePixs}");
             Console.Write($"\nIn Black pixels: {blackPixs}");
             var eof_s = eof ? "EOF found" : "WARNING: EOF NOT FOUND! FILE MAY BE CORUPTED!";
-            Console.Write($"\n{eof_s} - {eof_pos / 8}");
+            if (v1) Console.Write($"\n{eof_s} - {eof_pos / 8}");
             eof_end_bits_ref = (int)eof_pos + 8; //eof_end_bits * 16;
             eof_ref = eof;
             return ba;
@@ -654,10 +822,11 @@ namespace infinite_storage_glitch_csharp
             else
             {
                 var files = Directory.GetFiles("./tmp-mp4", "out*.*");
-                if (files.Length > 0) { Console.WriteLine("\nClearing all old output files"); }
+                if (files.Length > 0) { Console.Write("\nClearing all old output files"); }
                 foreach (var f in files) { File.Delete(f); }
             }
 
+            Console.Write("\n");
             // while (file.Video.TryGetNextFrame(out var imageData))
             for (int b = 0; b < file.Video.Info.NumberOfFrames; b++)
             {
@@ -670,7 +839,7 @@ namespace infinite_storage_glitch_csharp
                 // See the #Usage details for example .ToBitmap() implementation
                 // The .Save() method may be different depending on your graphics library
             }
-            Console.Write("\n");
+            //Console.Write("\n");
             file.Dispose();
         }
 
@@ -680,46 +849,58 @@ namespace infinite_storage_glitch_csharp
             //var files = Directory.GetFiles("./", "out.gif");
             bool eof = false;
             int eof_end_bits = 0;
-            byte[] data = new byte[(1280 * 720) * 7];
+            byte[] data = new byte[(1280 * 720)];
+            int out_eof = 0;
 
             switch (outputMode)
             {
                 case OutputMode.GIF:
                     Console.Write($"\n>> Reading file: {path}");
-                    data = GenExportGif(path, ref eof, ref eof_end_bits);
+                    data = GenExportGif(path, ref eof, ref eof_end_bits, ref out_eof);
                     break;
                 case OutputMode.JPEG:
                     Console.Write($"\n>> Reading files in: {path}");
-                    data = GenExportJpeg(path, ref eof, ref eof_end_bits);
+                    data = GenExportJpeg(path, ref eof, ref eof_end_bits, ref out_eof);
                     break;
                 case OutputMode.Video:
                     Console.Write($"\n>> Reading file: {path}");
-                    data = GenExportVideo(path, ref eof, ref eof_end_bits);
+                    data = GenExportVideo(path, ref eof, ref eof_end_bits, ref out_eof);
                     break;
             }
 
-            Console.Write($"\nSaving output");
+            int offset = ReadCompressionOffset(ref data, out_eof);
+
             if (!Directory.Exists("./export")) { Directory.CreateDirectory("./export"); }
-            Array.Resize(ref data, (eof_end_bits / 8)); // would be nice to know how to prevent this 
+            //Array.Resize(ref data, out_eof); // v0.2.2+ without blue pixel
+            if(offset == 0)
+                Array.Resize(ref data, (eof_end_bits / 8)); // would be nice to know how to prevent this 
 
-            var decompressed_data = zstd_decompress(data, 3);
+            var decompressed_data = data;
+            try
+            {
+                decompressed_data = zstd_decompress(data, 3); // only v0.2.1+ has compression
+                ReadMetadataFrame(ref decompressed_data); // only v0.2.2+ has metadata
+            }
+            catch (Exception e) { Console.Write("\nInvalid compression data or no compression data found"); } //Console.WriteLine(e.ToString()); }
 
+            Console.Write($"\nSaving output");
             File.WriteAllBytes($"./export/{name}", decompressed_data);
             //if (files.Length > 0) { Console.WriteLine("Clearing all output files"); foreach (var f in files) { File.Delete(f); } }
-            Console.WriteLine($"Done!");
+            Console.Write($"\nDone!");
         }
 
-        static void ClearConsole()
+        static void ClearConsole(string version)
         {
             Console.Clear();
-            Console.Write("infinite storage glitch - by memorix101");
+            Console.Write($"infinite storage glitch {version} - by memorix101");
         }
 
         static void Main(string[] args)
         {
             FFmpegLoader.FFmpegPath = "./ffmpeg/";
 
-            ClearConsole();
+            string version = "v0.2.2-alpha";
+            ClearConsole(version);
 
             string name = "profile.jpg";
             string path = $"./{name}";
@@ -735,20 +916,20 @@ namespace infinite_storage_glitch_csharp
                 switch (input)
                 {
                     case "0":
-                        ClearConsole();
+                        ClearConsole(version);
                         Console.Write("\rEnter file path:\n");
                         path = Console.ReadLine();
-                        ClearConsole();
+                        ClearConsole(version);
                         Console.Write("\rOutput format (0 - GIF, 1 - JPEG, 2 - MP4):\n0 for default - GIF\n");
                         string f = Console.ReadLine();
                         int _outMode = int.Parse(f);
                         WriteFile(path, (OutputMode)_outMode);
                         break;
                     case "1":
-                        ClearConsole();
+                        ClearConsole(version);
                         Console.Write("\rEnter file path (Directory for JPGs):\n");
                         path = Console.ReadLine();
-                        ClearConsole();
+                        ClearConsole(version);
                         Console.Write("\rInput format (0 - GIF, 1 - JPEG, 2 - MP4):\n0 for default - GIF\n");
                         string fi = Console.ReadLine();
                         int _ioutMode = int.Parse(fi);
@@ -763,15 +944,18 @@ namespace infinite_storage_glitch_csharp
             }
 #else
             WriteFile(path, OutputMode.GIF);
-            ReadFile(name, "./out.gif", OutputMode.GIF); // gif
-            //ReadFile(name, "25dD9ha.gif", OutputMode.GIF); // gif
+            //ReadFile(name, "./out.gif", OutputMode.GIF); // gif
+            ReadFile(name, "out.gif", OutputMode.GIF); // gif
+
+            //WriteFile(path, OutputMode.JPEG); // jpg
             //ReadFile(name, "./", OutputMode.JPEG); // jpg
-            //ReadFile(name, "./tmp-mp4", OutputMode.JPEG); // mp4
+            //ReadFile(name, "./tmp-mp4", OutputMode.JPEG); // jpg
+
             //WriteFile(path, OutputMode.Video);
-            //VideoToFrames("./igs   csharp test   15 fps v2.mp4");
+            //VideoToFrames("./out.mp4");
             //ReadFile(name, "./tmp-mp4", OutputMode.JPEG); // mp4
             //ReadFile(name, "./infinite-storage-glitch-csharp demo.mp4", OutputMode.Video); // mp4
-            //ReadFile(name, "./test.mp4", OutputMode.Video); // mp4
+            //ReadFile(name, "./out v0.2.2.mp4", OutputMode.Video); // mp4
 #endif
         }
     }
