@@ -255,7 +255,7 @@ namespace infinite_storage_glitch_csharp
             {
                 MemoryStream ms = new MemoryStream(data);
                 BinaryReader binaryReader = new BinaryReader(ms);
-                ret = binaryReader.ReadInt32(); 
+                ret = binaryReader.ReadInt32();
                 ms.Position++;
                 ms.SetLength(eof_size - ret + 5); // {byte[124837]} + meta header offset
                 //ms.ToArray().CopyTo(data, ms.Position);
@@ -264,7 +264,7 @@ namespace infinite_storage_glitch_csharp
                 //ms.CopyTo(tmp);
                 // tmp.Position = 5;
                 byte[] tmp = ms.ToArray();
-                Array.Copy(tmp, 5, data, 0, ms.Length-5);
+                Array.Copy(tmp, 5, data, 0, ms.Length - 5);
                 Array.Resize(ref data, eof_size - ret);
             }
             catch (Exception ex)
@@ -296,36 +296,33 @@ namespace infinite_storage_glitch_csharp
 
             // dataBufferSize = (dataLenght + metaDataLength) * 8f * 16f + remaining 0 bytes of last frame
             float splits = (fileBytes.Length) / (res.X * res.Y) * 8.0f * 16.0f; // 8 bity = 1 byte * 4x4 (16) pixels = 1 pixel block
-            float remainingFactora = ((int)MathF.Ceiling(splits) - splits);
-            float remainingFactorb = (splits - (int)splits);
-            float remaininDataSizea = fileBytes.Length / splits;
-            float remaininDataSizeb = remaininDataSizea * remainingFactora;
-            float remainingframeSize = ((res.X * res.Y) * remainingFactora) / 16; // remaining factor of last frame
-            int IremainingframeSize = (int)remainingframeSize;
-            float dataBufferSize = ((fileBytes.Length)) + (remaininDataSizeb); // bytes in bit size
-            long IdataBufferSize = (int)MathF.Ceiling((float)dataBufferSize); // should be 129600 bytes -> profile.jpg
-                                                             // ----------
-                                                             // IremainingframeSize -> empty bytes -> 38175
-                                                             // should be 1047998
-                                                             // DONE! - get rid of blue pixel eof by calculating byte size 
-                                                             // of all frames instead of marking eof and inserting 0 bytes
-                                                             // at eof fill the byte frame and compress it.
-                                                             // But how add up to decreased/increased size after compression? Add it uncompressed as second "metadata"? (Yes. I did that)
+            float splitsCeil = MathF.Ceiling(splits);
+            float fullDataSize = (splitsCeil * (res.X * res.Y)) / (16 * 8);
+            // remaining factor of last frame
+            // should be 129600 bytes -> profile.jpg
+            // ----------
+            // IremainingframeSize -> empty bytes -> 38175
+            // should be 1047998
+            // DONE! - get rid of blue pixel eof by calculating byte size 
+            // of all frames instead of marking eof and inserting 0 bytes
+            // at eof fill the byte frame and compress it.
+            // But how add up to decreased/increased size after compression? Add it uncompressed as second "metadata"? (Yes. I did that)
 
-            byte[] newData = new byte[IdataBufferSize];
-            fileBytes.CopyTo(newData, 0);
+            //byte[] newData = new byte[fullDataSize]; // without compression v0.2.2+ without blue pixel
+            //fileBytes.CopyTo(newData, 0);
 
             // zstd compression
-            var compressed = zstd_compress(fileBytes, 3); //var compressed = zstd_compress(newData, 3);
+            var compressed = zstd_compress(fileBytes, 3); 
+            //var compressed = zstd_compress(newData, 3); // without compression v0.2.2+ without blue pixel
             MemoryStream compressedfileStream = new MemoryStream(compressed);
-            float compressionFactor = (float)IdataBufferSize - (float)compressedfileStream.Length;
+            float compressionFactor = (float)fullDataSize - (float)compressedfileStream.Length;
 
             //MemoryStream fileStream = new MemoryStream(newData); // without compression v0.2.2+ without blue pixel
-            MemoryStream fileStream = new MemoryStream((int)IdataBufferSize); // with compression v0.2.2+ without blue pixel
+            MemoryStream fileStream = new MemoryStream((int)fullDataSize); // with compression v0.2.2+ without blue pixel
             compressedfileStream.CopyTo(fileStream);
 
             // Write compression offset as first data
-            MemoryStream tempStream = new MemoryStream((int)IdataBufferSize);
+            MemoryStream tempStream = new MemoryStream((int)fullDataSize);
             BinaryWriter bwTemp = new BinaryWriter(tempStream);
             bwTemp.Write((int)compressionFactor);
             bwTemp.Write((byte)0);
@@ -513,8 +510,8 @@ namespace infinite_storage_glitch_csharp
                         for (int b = 0; b < gif.Frames.Count + 1; b++)
                         {
                             if (b == 0) { continue; } // ImageSharp puts the first frame last 
-                            byte[] pixelBytes = new byte[gif.Width * gif.Height * Unsafe.SizeOf<Rgba32>()]; 
-                            if (b == gif.Frames.Count) { gif.Frames[gif.Frames.Count - 1].CopyPixelDataTo(pixelBytes); } 
+                            byte[] pixelBytes = new byte[gif.Width * gif.Height * Unsafe.SizeOf<Rgba32>()];
+                            if (b == gif.Frames.Count) { gif.Frames[gif.Frames.Count - 1].CopyPixelDataTo(pixelBytes); }
                             else { gif.Frames[b].CopyPixelDataTo(pixelBytes); } // overwrites last frame with empty one -> so we add one frame too much and remove it in the read function
                             ImageData imageData = new ImageData(pixelBytes, ImagePixelFormat.Rgba32, gif.Width, gif.Height);
                             video.Video.AddFrame(imageData);
@@ -872,7 +869,7 @@ namespace infinite_storage_glitch_csharp
 
             if (!Directory.Exists("./export")) { Directory.CreateDirectory("./export"); }
             //Array.Resize(ref data, out_eof); // v0.2.2+ without blue pixel
-            if(offset == 0)
+            if (offset == 0)
                 Array.Resize(ref data, (eof_end_bits / 8)); // would be nice to know how to prevent this 
 
             var decompressed_data = data;
